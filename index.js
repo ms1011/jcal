@@ -51,50 +51,48 @@ program
   });
 
 program
-  .command('add <title>')
-  .description('Adds a new schedule. Default to todo type, use -d for detailed.')
-  .option('-d, --detailed', 'Create a detailed schedule')
-  .option('-t, --time <time>', 'Specify time for detailed schedule (e.g., "Tomorrow 3pm")')
-  .option('-c, --content <content>', 'Specify content for detailed schedule')
-  .action(async (title, options) => {
+  .command('add <titles...>').description('Adds one or more new schedules. Default to todo type, use -d for detailed.').option('-d, --detailed', 'Create a detailed schedule').option('-t, --time <time>', 'Specify time for detailed schedule (e.g., "Tomorrow 3pm")').option('-c, --content <content>', 'Specify content for detailed schedule').action(async (titles, options) => {
     try {
       const db = await readDB();
-      const newSchedule = {
-        id: uuidv4().substring(0, 8),
-        title,
-        status: 'pending',
-        createdAt: dayjs().toISOString(),
-      };
+      const addedSchedules = [];
 
-      if (options.detailed) {
-        newSchedule.type = 'detailed';
-        let { time, content } = options;
+      for (const title of titles) {
+        const newSchedule = {
+          id: uuidv4().substring(0, 8),
+          title,
+          status: 'pending',
+          createdAt: dayjs().toISOString(),
+        };
 
-        if (!time) {
-          const answer = await inquirer.prompt({
-            type: 'input',
-            name: 'time',
-            message: 'Enter time for detailed schedule (e.g., "Tomorrow 3pm"): ',
-          });
-          time = answer.time;
+        if (options.detailed) {
+          newSchedule.type = 'detailed';
+          let { time, content } = options;
+
+          if (!time || !content) {
+            console.error(chalk.red(`❌ Error: For detailed schedules, --time and --content are required when adding multiple items. Skipping "${title}".`));
+            continue; // Skip this schedule and proceed to the next
+          }
+          newSchedule.dateTime = time;
+          newSchedule.content = content;
+        } else {
+          newSchedule.type = 'todo';
         }
-        if (!content) {
-          const answer = await inquirer.prompt({
-            type: 'input',
-            name: 'content',
-            message: 'Enter content for detailed schedule: ',
-          });
-          content = answer.content;
-        }
-        newSchedule.dateTime = time;
-        newSchedule.content = content;
-      } else {
-        newSchedule.type = 'todo';
+
+        db.schedules.push(newSchedule);
+        addedSchedules.push(newSchedule);
       }
 
-      db.schedules.push(newSchedule);
       await writeDB(db);
-      console.log(chalk.green('✅ Schedule added!'));
+
+      if (addedSchedules.length > 0) {
+        console.log(chalk.green('✅ Schedules added successfully!'));
+        addedSchedules.forEach(s => {
+          console.log(chalk.green(`  - "${s.title}" (ID: ${s.id})`));
+        });
+      } else {
+        console.log(chalk.yellow('No schedules were added.'));
+      }
+
     } catch (error) {
       console.error(chalk.red(`❌ Error adding schedule: ${error.message}`));
     }
@@ -122,18 +120,42 @@ program
         return;
       }
 
+      // Sort schedules by creation date (newest first)
+      schedulesToDisplay.sort((a, b) => dayjs(b.createdAt).diff(dayjs(a.createdAt)));
+
       schedulesToDisplay.forEach(schedule => {
-        let output = `ID: ${schedule.id} | Type: ${schedule.type.toUpperCase()} | Title: ${schedule.title}`;
-        if (schedule.type === 'detailed') {
-          output += ` | Time: ${schedule.dateTime} | Content: ${schedule.content}`;
-        }
-        output += ` | Created: ${dayjs(schedule.createdAt).format('YYYY-MM-DD HH:mm')}`;
+        let statusIcon = '';
+        let coloredOutput;
 
         if (schedule.status === 'done') {
-          console.log(chalk.gray.strikethrough(output + ' (DONE)'));
+          statusIcon = chalk.green('✔');
+          coloredOutput = chalk.gray;
         } else {
-          console.log(chalk.yellow(output + ' (PENDING)'));
+          statusIcon = chalk.yellow('○');
+          coloredOutput = chalk.yellow;
         }
+
+        let typeColor;
+        if (schedule.type === 'todo') {
+          typeColor = chalk.cyan;
+        } else {
+          typeColor = chalk.magenta;
+        }
+
+        let output = `${statusIcon} ${typeColor(schedule.type.toUpperCase())} [${chalk.white(schedule.id)}] ${chalk.bold(schedule.title)}`;
+
+        if (schedule.type === 'detailed') {
+          output += `\n  ${chalk.blue('Time:')} ${schedule.dateTime}`;
+          output += `\n  ${chalk.blue('Content:')} ${schedule.content}`;
+        }
+        output += `\n  ${chalk.blue('Created:')} ${dayjs(schedule.createdAt).format('YYYY-MM-DD HH:mm')}`;
+
+        if (schedule.status === 'done') {
+          console.log(chalk.strikethrough(output));
+        } else {
+          console.log(output);
+        }
+        console.log(''); // Add an empty line for better separation
       });
     } catch (error) {
       console.error(chalk.red(`❌ Error listing schedules: ${error.message}`));
@@ -168,6 +190,7 @@ program
   .action(async (id) => {
     try {
       const db = await readDB();
+      const scheduleToRemove = db.schedules.find(s => s.id === id);
       const initialLength = db.schedules.length;
       db.schedules = db.schedules.filter(s => s.id !== id);
 
@@ -176,8 +199,7 @@ program
         return;
       }
 
-      await writeDB(db);
-      console.log(chalk.green(`✅ Schedule with ID '${id}' removed.`));
+      console.log(chalk.green(`✅ Schedule "${scheduleToRemove.title}" (ID: ${id}) removed.`));
     } catch (error) {
       console.error(chalk.red(`❌ Error removing schedule: ${error.message}`));
     }
