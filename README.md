@@ -2,6 +2,8 @@
 
 A CLI tool to manage schedules and to-do lists directly from the terminal.
 
+All schedule data is stored in a `schedule.json` file located in the current working directory where `jcal` commands are executed.
+
 ## Installation
 
 To install `jcal` globally, run:
@@ -26,18 +28,25 @@ Creates an empty `schedule.json` file in the current directory if it doesn't exi
 jcal init
 ```
 
-### `jcal add <title>`
+### `jcal add <titles...>`
 
-Adds a new schedule. By default, it creates a `todo` type. Use the `-d` or `--detailed` flag to create a `detailed` schedule. If `detailed`, and `--time` or `--content` are missing, it will prompt you for them.
+Adds one or more new schedules. By default, it creates a `todo` type. Use the `-d` or `--detailed` flag to create a `detailed` schedule. When adding multiple detailed schedules, both `--time` and `--content` options are required.
 
 ```bash
 jcal add "Buy milk"
+jcal add "Task A" "Task B" "Task C"
 jcal add "Team Meeting" -d --time "Tomorrow 3pm" --content "Discuss Q4 roadmap"
+jcal add "Project Review" "Client Call" -d --time "Friday 10am" --content "Prepare presentation"
 ```
 
 ### `jcal list` (or `jcal ls`)
 
-Lists all schedules. By default, it shows only `pending` items. Use `--done` to show only `done` items, or `--all` to show all items.
+Lists all schedules. By default, it shows only `pending` items. Use `--done` to show only `done` items, or `--all` to show all items. Output is color-coded for better readability:
+
+*   `pending` items: Yellow with a `○` icon.
+*   `done` items: Gray with a `✔` icon and strikethrough.
+*   `todo` type: Cyan.
+*   `detailed` type: Magenta.
 
 ```bash
 jcal ls
@@ -55,7 +64,7 @@ jcal done a3b8c1f9
 
 ### `jcal remove <id>` (or `jcal rm`)
 
-Deletes the schedule with the given `<id>`.
+Deletes the schedule with the given `<id>`. The command will confirm the removal by displaying the title and ID of the deleted schedule.
 
 ```bash
 jcal rm a3b8c1f9
