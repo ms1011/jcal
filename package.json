@@ -1,6 +1,6 @@
 {
   "name": "jcal-cli",
-  "version": "1.0.0",
+  "version": "1.1.0-beta.0",
   "description": "A CLI tool to manage schedules and to-do lists.",
   "main": "index.js",
   "type": "module",
