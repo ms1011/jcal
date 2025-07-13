@@ -1,5 +1,5 @@
 {
-  "name": "jcal",
+  "name": "jcal-cli",
   "version": "1.0.0",
   "description": "A CLI tool to manage schedules and to-do lists.",
   "main": "index.js",

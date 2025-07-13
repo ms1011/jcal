@@ -9,7 +9,7 @@ All schedule data is stored in a `schedule.json` file located in the current wor
 To install `jcal` globally, run:
 
 ```bash
-npm install -g jcal
+npm install -g jcal-cli
 ```
 
 Alternatively, you can use `npx` to run it without global installation:
