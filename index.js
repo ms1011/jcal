@@ -220,4 +220,79 @@ program
     }
   });
 
+program
+  .command('done <id>')
+  .description('Marks the schedule with the given <id> as done.')
+  .action(async (id) => {
+    try {
+      const db = await readDB();
+      const schedule = db.schedules.find(s => s.id === id);
+      if (schedule) {
+        schedule.status = 'done';
+        await writeDB(db);
+        console.log(chalk.green('✅ Schedule marked as done.'));
+      } else {
+        console.error(chalk.red('❌ Error: Schedule with that ID not found.'));
+      }
+    } catch (error) {
+      console.error(chalk.red(`❌ Error updating schedule: ${error.message}`));
+    }
+  });
+
+program
+  .command('remove <id>')
+  .alias('rm')
+  .description('Deletes the schedule with the given <id>.')
+  .action(async (id) => {
+    try {
+      const db = await readDB();
+      const initialLength = db.schedules.length;
+      db.schedules = db.schedules.filter(s => s.id !== id);
+      if (db.schedules.length < initialLength) {
+        await writeDB(db);
+        console.log(chalk.green('✅ Schedule removed successfully.'));
+      } else {
+        console.error(chalk.red('❌ Error: Schedule with that ID not found.'));
+      }
+    } catch (error) {
+      console.error(chalk.red(`❌ Error removing schedule: ${error.message}`));
+    }
+  });
+
+program
+  .command('update <id>')
+  .description('Updates an existing schedule.')
+  .option('-T, --title <title>', 'Update the title')
+  .option('-t, --time <time>', 'Update the date/time')
+  .option('-c, --content <content>', 'Update the content')
+  .action(async (id, options) => {
+    try {
+      const db = await readDB();
+      const schedule = db.schedules.find(s => s.id === id);
+      if (schedule) {
+        if (options.title) schedule.title = options.title;
+        if (options.time) {
+          if (schedule.type === 'detailed') {
+            schedule.dateTime = dayjs.utc(options.time, 'YYYY-MM-DD HH:mm').toISOString();
+          } else {
+            console.warn(chalk.yellow('⚠️ Warning: Cannot set time on a todo item.'));
+          }
+        }
+        if (options.content) {
+          if (schedule.type === 'detailed') {
+            schedule.content = options.content;
+          } else {
+            console.warn(chalk.yellow('⚠️ Warning: Cannot set content on a todo item.'));
+          }
+        }
+        await writeDB(db);
+        console.log(chalk.green('✅ Schedule updated successfully.'));
+      } else {
+        console.error(chalk.red('❌ Error: Schedule with that ID not found.'));
+      }
+    } catch (error) {
+      console.error(chalk.red(`❌ Error updating schedule: ${error.message}`));
+    }
+  });
+
 program.parse(process.argv);
