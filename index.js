@@ -13,7 +13,13 @@ import customParseFormat from 'dayjs/plugin/customParseFormat.js'; // Import cus
 import { v4 as uuidv4 } from 'uuid';
 import fs from 'fs/promises';
 import path from 'path';
-import pkg from './package.json' assert { type: 'json' };
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const pkg = JSON.parse(readFileSync(path.join(__dirname, 'package.json'), 'utf-8'));
 
 dayjs.extend(isBetween);
 dayjs.extend(isoWeek);
