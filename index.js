@@ -4,11 +4,26 @@ import { Command } from 'commander';
 import inquirer from 'inquirer';
 import chalk from 'chalk';
 import dayjs from 'dayjs';
+import isBetween from 'dayjs/plugin/isBetween.js';
+import isoWeek from 'dayjs/plugin/isoWeek.js'; // Add isoWeek plugin
+import isSameOrAfter from 'dayjs/plugin/isSameOrAfter.js';
+import isSameOrBefore from 'dayjs/plugin/isSameOrBefore.js';
+import utc from 'dayjs/plugin/utc.js'; // Import UTC plugin
+import customParseFormat from 'dayjs/plugin/customParseFormat.js'; // Import customParseFormat plugin
 import { v4 as uuidv4 } from 'uuid';
 import fs from 'fs/promises';
+import path from 'path';
+import pkg from './package.json' assert { type: 'json' };
+
+dayjs.extend(isBetween);
+dayjs.extend(isoWeek);
+dayjs.extend(isSameOrAfter);
+dayjs.extend(isSameOrBefore);
+dayjs.extend(utc); // Extend with UTC plugin
+dayjs.extend(customParseFormat); // Extend with customParseFormat plugin
 
 const program = new Command();
-const DB_FILE = 'schedule.json';
+const DB_FILE = path.join(process.cwd(), 'schedule.json');
 
 // Helper functions for file I/O
 async function readDB() {
@@ -31,7 +46,7 @@ async function writeDB(data) {
 program
   .name('jcal')
   .description('A CLI tool to manage schedules and to-do lists.')
-  .version('1.0.0');
+  .version(pkg.version);
 
 program
   .command('init')
@@ -72,7 +87,7 @@ program
             console.error(chalk.red(`❌ Error: For detailed schedules, --time and --content are required when adding multiple items. Skipping "${title}".`));
             continue; // Skip this schedule and proceed to the next
           }
-          newSchedule.dateTime = time;
+          newSchedule.dateTime = dayjs.utc(time, 'YYYY-MM-DD HH:mm').toISOString();
           newSchedule.content = content;
         } else {
           newSchedule.type = 'todo';
@@ -93,7 +108,7 @@ program
         console.log(chalk.yellow('No schedules were added.'));
       }
 
-    } catch (error) {
+    } catch (error)
       console.error(chalk.red(`❌ Error adding schedule: ${error.message}`));
     }
   });
@@ -104,15 +119,52 @@ program
   .description('Lists all schedules.')
   .option('--done', 'Show only done items')
   .option('--all', 'Show all items (pending and done)')
+  .option('--date <date>', 'Show schedules for a specific date (YYYY-MM-DD)')
+  .option('--today', 'Show schedules for today')
+  .option('--tomorrow', 'Show schedules for tomorrow')
+  .option('--this-week', 'Show schedules for this week')
+  .option('--next-week', 'Show schedules for next week')
+  .option('--this-month', 'Show schedules for this month')
+  .option('--next-month', 'Show schedules for next month')
   .action(async (options) => {
+    console.log('Options received:', options); // Debugging line
     try {
       const db = await readDB();
       let schedulesToDisplay = db.schedules;
 
+      // Filter by status
       if (options.done) {
         schedulesToDisplay = schedulesToDisplay.filter(s => s.status === 'done');
       } else if (!options.all) {
         schedulesToDisplay = schedulesToDisplay.filter(s => s.status === 'pending');
+      }
+
+      // Filter by date/time
+      if (options.date || options.today || options.tomorrow || options.thisWeek || options.nextWeek || options.thisMonth || options.nextMonth) {
+        const now = dayjs().utc(); // Use UTC for current time
+        schedulesToDisplay = schedulesToDisplay.filter(s => {
+          if (s.type !== 'detailed' || !s.dateTime) return false; // Only detailed schedules with dateTime can be filtered by date
+
+          const scheduleDate = dayjs(s.dateTime).utc(); // Parse stored date as UTC
+
+          if (options.date) {
+            const targetDate = dayjs.utc(options.date, 'YYYY-MM-DD');
+            return scheduleDate.startOf('day').isSame(targetDate.startOf('day'));
+          } else if (options.today) {
+            return scheduleDate.startOf('day').isSame(now.startOf('day'));
+          } else if (options.tomorrow) {
+            return scheduleDate.startOf('day').isSame(now.add(1, 'day').startOf('day'));
+          } else if (options.thisWeek) {
+            return scheduleDate.startOf('day').isBetween(now.startOf('isoWeek').startOf('day'), now.endOf('isoWeek').endOf('day'), null, '[]');
+          } else if (options.nextWeek) {
+            return scheduleDate.startOf('day').isBetween(now.add(1, 'week').startOf('isoWeek').startOf('day'), now.add(1, 'week').endOf('isoWeek').endOf('day'), null, '[]');
+          } else if (options.thisMonth) {
+            return scheduleDate.startOf('day').isSame(now.startOf('month'), 'month');
+          } else if (options.nextMonth) {
+            return scheduleDate.startOf('day').isSame(now.add(1, 'month').startOf('month'), 'month');
+          }
+          return false; // No date filter matched, so exclude this schedule
+        });
       }
 
       if (schedulesToDisplay.length === 0) {
@@ -159,84 +211,6 @@ program
       });
     } catch (error) {
       console.error(chalk.red(`❌ Error listing schedules: ${error.message}`));
-    }
-  });
-
-program
-  .command('done <id>')
-  .description('Marks the schedule with the given <id> as done.')
-  .action(async (id) => {
-    try {
-      const db = await readDB();
-      const scheduleIndex = db.schedules.findIndex(s => s.id === id);
-
-      if (scheduleIndex === -1) {
-        console.log(chalk.red(`❌ Error: Schedule with ID '${id}' not found.`));
-        return;
-      }
-
-      db.schedules[scheduleIndex].status = 'done';
-      await writeDB(db);
-      console.log(chalk.green(`✅ Schedule with ID '${id}' marked as done.`));
-    } catch (error) {
-      console.error(chalk.red(`❌ Error marking schedule as done: ${error.message}`));
-    }
-  });
-
-program
-  .command('remove <id>')
-  .alias('rm')
-  .description('Deletes the schedule with the given <id>.')
-  .action(async (id) => {
-    try {
-      const db = await readDB();
-      const scheduleToRemove = db.schedules.find(s => s.id === id);
-      const initialLength = db.schedules.length;
-      db.schedules = db.schedules.filter(s => s.id !== id);
-
-      if (db.schedules.length === initialLength) {
-        console.log(chalk.red(`❌ Error: Schedule with ID '${id}' not found.`));
-        return;
-      }
-
-      console.log(chalk.green(`✅ Schedule "${scheduleToRemove.title}" (ID: ${id}) removed.`));
-    } catch (error) {
-      console.error(chalk.red(`❌ Error removing schedule: ${error.message}`));
-    }
-  });
-
-program
-  .command('update <id>')
-  .description('Updates an existing schedule.')
-  .option('--title <title>', 'New title for the schedule')
-  .option('--time <time>', 'New time for detailed schedule')
-  .option('--content <content>', 'New content for detailed schedule')
-  .action(async (id, options) => {
-    try {
-      const db = await readDB();
-      const scheduleIndex = db.schedules.findIndex(s => s.id === id);
-
-      if (scheduleIndex === -1) {
-        console.log(chalk.red(`❌ Error: Schedule with ID '${id}' not found.`));
-        return;
-      }
-
-      const schedule = db.schedules[scheduleIndex];
-
-      if (options.title) {
-        schedule.title = options.title;
-      }
-      if (options.time && schedule.type === 'detailed') {
-        schedule.dateTime = options.time;
-      }
-      if (options.content && schedule.type === 'detailed') {
-        schedule.content = options.content;
-      }
-
-      await writeDB(db);
-      console.log(chalk.green(`✅ Schedule with ID '${id}' updated.`));
-    } catch (error) {
-      console.error(chalk.red(`❌ Error updating schedule: ${error.message}`));
     }
   });
 
