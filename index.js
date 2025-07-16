@@ -114,7 +114,7 @@ program
         console.log(chalk.yellow('No schedules were added.'));
       }
 
-    } catch (error)
+    } catch (error) {
       console.error(chalk.red(`❌ Error adding schedule: ${error.message}`));
     }
   });
